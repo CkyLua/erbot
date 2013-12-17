@@ -139,7 +139,7 @@ class FighterCommand extends Command
         $this->humanSleep();
         
         $this->writeln('<comment>Fighting...</comment>');
-        $fightResult = $this->mil->fight($campaign->getId());
+        $fightResult = $this->mil->fight($campaign);
         if (isset($fightResult['user']['food_remaining'])) {
             $foodRemaining = $fightResult['user']['food_remaining'];
         } else {
