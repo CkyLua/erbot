@@ -1,0 +1,14 @@
+{
+    "name": "erpk/erbot",
+    "require": {
+        "php": ">=5.4",
+        "erpk/harvester": "dev-master",
+        "symfony/console": "2.4.*",
+        "monolog/monolog": "*"
+    },
+    "autoload": {
+        "psr-0": {
+            "ERBot\\": "src/"
+        }
+    }
+}
