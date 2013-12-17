@@ -13,10 +13,13 @@ use Guzzle\Plugin\Log\LogPlugin;
 use Guzzle\Log\MessageFormatter;
 
 require __DIR__.'/../vendor/autoload.php';
-//Erpk\Common\EntityManager::useCopy(true); // not working with non-ascii chars in temporary path, disabled
 
 if (!isset($configFile)) {
     $configFile = __DIR__.'/../config.json';
+}
+
+if (isset($useCopy) && $useCopy === true) {
+    Erpk\Common\EntityManager::useCopy(true);
 }
 
 $bot = new Application('ERBot');
