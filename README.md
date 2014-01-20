@@ -1,28 +1,25 @@
-erbot
+Introduction
 =====
+erbot is eRepublik multifeatured bot, which helps you completing daily tasks on your account.
 
-eRepublik multifeatured bot
-
-####Building
+###Building and configuration
 ```bash
+sudo apt-get install git curl php5-cli php5-curl php5-sqlite
 wget -O erbot.tar.gz https://github.com/erpk/erbot/archive/master.tar.gz
-tar xzf erbot.tar.gz
-cd erbot-master/
+tar -xzf erbot.tar.gz
+mv erbot-master erbot && cd erbot/
 curl -sS https://getcomposer.org/installer | php
 php composer.phar install
-chmod +x bin/erbot
+cd bin/ && chmod +x erbot
+./erbot configure
 ```
-####Configuration
+Usage
+=====
+In order to display available commands, type command below:
 ```bash
-./bin/erbot configure
-```
-####Usage
-Check available commands:
-```bash
-./bin/erbot list
+./erbot list
 ```
 
-Display the help on command (command `fighter` here):
-```bash
-./bin/erbot help fighter
-```
+Some of the features
+* **`fighter`** - chooses the campaign from the available ones, then burns your all energy available fighting in that battle.  By default it chooses Q7 weapons.
+* **`refill`** - refills your energy, useful when you can't visit eRepublik all the time (or in the night)
