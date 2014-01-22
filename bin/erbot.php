@@ -1,4 +1,3 @@
-#!/usr/bin/env php
 <?php
 use Erpk\Harvester\Client\Client;
 use Erpk\Harvester\Client\Proxy\HttpProxy;
