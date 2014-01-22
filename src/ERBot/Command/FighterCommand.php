@@ -1,6 +1,10 @@
 <?php
 namespace ERBot\Command;
 
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\EventDispatcher\Event;
+
 use Erpk\Harvester\Module\Military\MilitaryModule;
 use Erpk\Harvester\Module\Management\ManagementModule;
 use Erpk\Common\EntityManager;
@@ -12,203 +16,206 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class FighterCommand extends Command
+class FighterCommand extends Command implements EventSubscriberInterface
 {
-    protected $stack = array();
-    protected $output;
-    protected $mil;
-    protected $mgmt;
+    protected $campaignsAvailable = array();
+    protected $weaponQuality = 7;
+    protected $minimumEnergy = 40;
+
+    public static function getSubscribedEvents()
+    {
+        return [
+            'startup'             => ['onStartup'],
+            'fight.ready'         => ['onFightReady'],
+            'fight.BATTLE_WON'    => ['onBattleWon'],
+            'fight.ZONE_INACTIVE' => ['onZoneInactive'],
+            'fight.LOW_HEALTH'    => ['onLowEnergy'],
+            'fight.ENEMY_KILLED'  => ['onEnemyKilled'],
+            'fight.ENEMY_ATTACKED'=> ['onEnemyKilled'],
+            'fight.SHOOT_LOCKOUT' => ['onShootLockout']
+        ];
+    }
 
     protected function configure()
     {
         $this
             ->setName('fighter')
-            ->setDescription('Burn energy in automatically choosen campaign.')
-            ->addOption(
-                'delay',
-                'd',
-                InputOption::VALUE_REQUIRED,
-                'Delay fighting by specified amount of seconds',
-                0
-            );
+            ->setDescription('Burn energy in automatically choosen campaign.');
     }
 
-    protected function addCampaignsToStack()
+    protected function addCampaigns($campaigns)
     {
-        foreach (func_get_args() as $array) {
-            $this->stack = array_merge($this->stack, $array);
-        }
+        $this->campaignsAvailable = array_merge($this->campaignsAvailable, $campaigns);
     }
 
-    protected function getCampaignFromStack()
+    protected function chooseCampaign($event)
     {
-        while ($id = array_shift($this->stack)) {
-            $this->writeln('Getting info about campaign '.$id.'... ');
-            $campaign = $this->mil->getCampaign($id);
-            $this->writeln('Region: '.$campaign->getRegion()->getName());
-            $this->writeln('Resistance war: '.($campaign->isResistance() ? 'yes' : 'no'));
-            $this->writeln('Getting additional statistics... ');
-            $campaignStats = $this->mil->getCampaignStats($campaign);
+        while ($id = array_shift($this->campaignsAvailable)) {
+            $event->output->writeln('Getting info about campaign '.$id.'... ');
+            $campaign = $event->mil->getCampaign($id);
+            $event->output->writeln('Region: '.$campaign->getRegion()->getName());
+            $event->output->writeln('Resistance war: '.($campaign->isResistance() ? 'yes' : 'no'));
+            $event->output->writeln('Getting additional statistics... ');
+            $campaignStats = $event->mil->getCampaignStats($campaign);
             if (!$campaignStats['is_finished']) {
-                $result = $this->mil->changeWeapon($campaign->getId(), 7);
+                $result = $event->mil->changeWeapon($campaign->getId(), $this->weaponQuality);
                 if ($result) {
                     return $campaign;
                 } else {
-                    throw new Exception('You don\'t have weapons');
+                    throw new Exception('You don\'t have Q'.$this->weaponQuality.' weapon');
                 }
             } else {
-                $this->writeln('Already finished');
+                $event->output->writeln('Already ended');
             }
         }
-        $this->writeln('Stack empty, terminating');
+        $event->output->writeln('No campaigns available, terminating.');
         exit;
-    }
-
-    protected function writeln($s)
-    {
-        $this->output->writeln($s);
-    }
-
-    protected function write($s)
-    {
-        $this->output->write($s);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $client = $this->getApplication()->erpkClient;
-        $this->mil = new MilitaryModule($client);
-        $this->mgmt = new ManagementModule($client);
-        $this->output = $output;
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addSubscriber($this);
 
-        $delay = filter_var($input->getOption('delay'), FILTER_VALIDATE_INT);
-        if ($delay === false || $delay < 0) {
-            throw new RuntimeException('Delay must be specified in seconds.');
+        $event = new Event();
+        $event->output = $output;
+        $event->client = $this->getApplication()->erpkClient;
+        $event->mgmt   = new ManagementModule($event->client);
+        $event->mil    = new MilitaryModule($event->client);
+
+        $dispatcher->dispatch('startup', $event);
+
+        // CHECK DAILY ORDER
+        $event->output->write('<comment>Checking Daily Order status... </comment>');
+        $doStatus = $event->mil->getDailyOrderStatus();
+        if (isset($doStatus['do_reward_on']) && $doStatus['do_reward_on'] == true) {
+            $event->mil->getDailyOrderReward($doStatus['do_mission_id'], $doStatus['groupId']);
+
         }
+        $event->output->writeln('<comment>done</comment>');
+    }
 
-        if ($delay > 0) {
-            $wakeupAt = time() + $delay;
-            $output->writeln('<comment>Waiting until '.gmdate('r', $wakeupAt).'.</comment>');
-            time_sleep_until($wakeupAt);
-        }
-
-        $this->writeln(str_repeat('-', 30).'DATE:'.date('d/m/Y H:i:s').str_repeat('-', 30));
+    public function onStartup(Event $event, $eventName, $dispatcher)
+    {
+        $event->output->writeln(
+            str_repeat('-', 30).'DATE: '.date('r').str_repeat('-', 30)
+        );
         
         try {
-            $this->output->write('<comment>Loading active battles... </comment>');
-            $active = $this->mil->getActiveCampaigns();
+            $event->output->write('<comment>Loading active campaigns... </comment>');
+            $active = $event->mil->getActiveCampaigns();
 
-            $this->addCampaignsToStack(
-                $active['country'],
-                $active['cotd'],
-                $active['allies']
-            );
+            $this->addCampaigns($active['country']);
+            $this->addCampaigns($active['cotd']);
+            $this->addCampaigns($active['allies']);
 
-            $this->writeln('loaded');
-            $this->fight($this->getCampaignFromStack());
-
-            // CHECK DAILY ORDER
-            $doStatus = $this->mil->getDailyOrderStatus();
-            if (isset($doStatus['do_reward_on']) && $doStatus['do_reward_on'] == true) {
-                $this->mil->getDailyOrderReward($doStatus['do_mission_id'], $doStatus['groupId']);
-            }
+            $event->output->writeln('loaded');
+            $event->currentCampaign = $this->chooseCampaign($event);
+            $dispatcher->dispatch('fight.ready', $event);
         } catch (\Exception $e) {
-            $this->writeln('<error>'.(string)$e.'</error>');
+            $event->output->writeln('<error>'.(string)$e.'</error>');
         }
     }
 
-    protected function humanSleep()
+    public function onFightReady(Event $event, $eventName, $dispatcher)
     {
-        $sleep = mt_rand(150, 350)/100;
-        //$sleep = mt_rand(150, 250)/100;
-        $this->writeln('<comment>Sleeping '.$sleep.' seconds</comment>');
+        $event->output->writeln(str_repeat('-', 60));
+        $this->humanSleep($event);
+        
+        $event->output->writeln('<comment>Fighting... </comment>');
+        $event->fightResult = $event->mil->fight($event->currentCampaign);
+
+        $event->hp =
+            isset($event->fightResult['user']['health']) ?
+            $event->fightResult['user']['health'] : null;
+        $event->hpRecoverable =
+            isset($event->fightResult['user']['food_remaining']) ?
+            $event->fightResult['user']['food_remaining'] : 0;
+
+        $status = $event->fightResult['message'];
+        $event->output->writeln('<info>Response: '.$status.'</info>');
+        $dispatcher->dispatch('fight.'.$status, $event);
+    }
+
+    public function onBattleWon(Event $event, $eventName, $dispatcher)
+    {
+        $event->output->writeln('<comment>Campaign ended.</comment>');
+
+        $event->currentCampaign = $this->chooseCampaign($event);
+        $dispatcher->dispatch('fight.ready', $event);
+    }
+
+    public function onZoneInactive(Event $event, $eventName, $dispatcher)
+    {
+        $event->output->writeln('<comment>Waiting for the next round!</comment>');
+        sleep(30);
+        $dispatcher->dispatch('fight.ready', $event);
+    }
+
+    public function onLowEnergy(Event $event, $eventName, $dispatcher)
+    {
+        $this->eat($event);
+
+        if ($event->hp >= $this->minimumEnergy) {
+            $dispatcher->dispatch('fight.ready', $event);
+        } else {
+            $event->output->writeln('<comment>Not enough energy to fight, terminating!</comment>');
+        }
+    }
+
+    public function onEnemyKilled(Event $event, $eventName, $dispatcher)
+    {
+        $dmgDealt =
+            isset($event->fightResult['user']['givenDamage']) ?
+            $event->fightResult['user']['givenDamage'] : 0;
+
+        $event->output->writeln(
+            '<info>Dealt '.$dmgDealt.' damage, '.
+            'you have '.round($event->hp).' HP and '.round($event->hpRecoverable).' HP recoverable</info>'
+        );
+
+        if ($event->hp >= $this->minimumEnergy) {
+            $dispatcher->dispatch('fight.ready', $event);
+        } else {
+            if ($event->hpRecoverable > 0) {
+                $this->eat($event);
+                if ($event->hp < $this->minimumEnergy) {
+                    $event->output->writeln('<info>Not enough energy to fight, terminating!</info>');
+                } else {
+                    $dispatcher->dispatch('fight.ready', $event);
+                }
+            } else {
+                $event->output->writeln('<info>Success, finishing!</info>');
+            }
+        }
+    }
+
+    public function onShootLockout(Event $event, $eventName, $dispatcher)
+    {
+        $event->output->writeln('<comment>Too fast, waiting a moment...</comment>');
+        sleep(30);
+        $dispatcher->dispatch('fight.ready', $event);
+    }
+
+    protected function humanSleep($event)
+    {
+        $sleep = mt_rand(150, 350)/100; // <1.5s, 3.5s>
+        $event->output->writeln('<comment>Waiting '.$sleep.' seconds</comment>');
         usleep($sleep*1000000);
     }
 
-    protected function eat()
+    protected function eat(Event $event)
     {
-        $this->writeln('<comment>Eating...</comment>');
-        $eatResult = $this->mgmt->eat();
-        $this->writeln('<info>health: '.$eatResult['health'].', food remaining: '.$eatResult['food_remaining'].'</info>');
-        return $eatResult;
-    }
+        $event->output->write('<comment>Eating... </comment>');
+        
+        $eatResult = $event->mgmt->eat();
+        var_dump($eatResult);
 
-    protected function fight($campaign)
-    {
-        $this->writeln(str_repeat('-', 60));
-        $this->humanSleep();
-        
-        $this->writeln('<comment>Fighting...</comment>');
-        $fightResult = $this->mil->fight($campaign);
-        if (isset($fightResult['user']['food_remaining'])) {
-            $foodRemaining = $fightResult['user']['food_remaining'];
-        } else {
-            $foodRemaining = 0;
-        }
-        $health = isset($fightResult['user']['health']) ? $fightResult['user']['health'] : null;
-        $msg = $fightResult['message'];
-        $this->writeln('<info>Response: '.$msg.'</info>');
-        
-        $this->humanSleep();
-        
-        switch($msg) {
-            case 'BATTLE_WON':
-                $this->writeln('<comment>Battle won!</comment>');
-                $this->fight($this->getCampaignFromStack());
-                break;
-            case 'ZONE_INACTIVE':
-                $this->writeln('<comment>Waiting 5 minutes!</comment>');
-                sleep(300);
-                $this->fight($campaign);
-                break;
-            case 'LOW_HEALTH':
-                $eatResult = $this->eat();
-                if ($eatResult['health'] < 10) {
-                    $this->writeln('<comment>Finished!</comment>');
-                    return true;
-                } elseif ($eatResult['health'] >= 10) {
-                    $this->fight($campaign);
-                }
-                break;
-            case 'ENEMY_KILLED':
-            case 'ENEMY_ATTACKED':
-                if ($msg == 'ENEMY_ATTACKED') {
-                    $this->writeln('<info>Attacked, '.$health.' health (enemy has '.$fightResult['enemy']['health'].' health)</info>');
-                } else {
-                    $this->writeln('<info>Killed, '.$fightResult['user']['givenDamage'].' damage dealt, '.$health.' health</info>');
-                    /*$s1 = (int)strtr($fightResult['user']['skill'], array(','=>''));
-                    $s2 = (int)strtr($fightResult['enemy']['skill'], array(','=>''));
-                    $damage = (60+(($s1-$s2)/10))*(1+($fightResult['user']['weaponDamage']-$fightResult['enemy']['damage'])/400);
-                    if (((($health+$foodRemaining)/10)*$damage) < $fightResult['enemy']['health'] && $foodRemaining > 0) {
-                        $this->eat();
-                        $this->writeln('Done!');
-                        exit;
-                    }*/
-                }
+        $event->hp = $eatResult['health'];
+        $event->hpRecoverable = $eatResult['food_remaining'];
 
-                if ($health >= 30) {
-                    $this->fight($campaign);
-                } elseif ($health < 30) {
-                    if ($foodRemaining > 0) {
-                        $eatResult = $this->eat();
-                        if ($eatResult['health'] < 30) {
-                            $this->writeln('<info>Low energy, finishing!</info>');
-                        } elseif ($eatResult['health'] >= 30) {
-                            $this->fight($campaign);
-                        }
-                    } else {
-                        $this->writeln('<info>Success, finishing!</info>');
-                    }
-                }
-                break;
-            case 'SHOOT_LOCKOUT':
-                $this->writeln('<comment>Waiting 30 seconds</comment>');
-                sleep(30);
-                $this->fight($campaign);
-                break;
-            default:
-                $this->writeln('<error>Unexpected response, terminating</error>');
-                return false;
-        }
+        $event->output->writeln(
+            '<comment>now you have '.$event->hp.' HP and '.$event->hpRecoverable.' HP recoverable<comment>'
+        );
     }
 }
