@@ -144,7 +144,9 @@ class ForexCommand extends Command
                     }
                 }
             } catch (\Exception $e) {
-                $this->output->writeln('<error>'.$e->getMessage().'</error>');
+                if ($this->output->isVerbose()) {
+                    $this->output->writeln('<error>'.$e->getMessage().'</error>');
+                }
             }
             usleep($this->scanInterval*1000000);
         }
