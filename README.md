@@ -5,7 +5,7 @@ erbot is eRepublik multifeatured bot, which helps you completing daily tasks on 
 ###Building and configuration
 ```bash
 sudo apt-get update
-sudo apt-get install git curl php5-cli php5-curl php5-sqlite
+sudo apt-get install git curl php5-cli php5-curl php5-sqlite php5-json
 wget -O erbot.tar.gz https://github.com/erpk/erbot/archive/master.tar.gz
 tar -xzf erbot.tar.gz
 mv erbot-master erbot && cd erbot/
