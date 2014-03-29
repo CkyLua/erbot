@@ -106,23 +106,19 @@ class FighterCommand extends Command implements EventSubscriberInterface
             str_repeat('-', 30).'DATE: '.date('r').str_repeat('-', 30)
         );
         
-        try {
-            $event->output->write('<comment>Loading active campaigns... </comment>');
-            $active = $event->mil->getActiveCampaigns();
+        $event->output->write('<comment>Loading active campaigns... </comment>');
+        $active = $event->mil->getActiveCampaigns();
 
-            $this->addCampaigns($active['country']);
-            $this->addCampaigns($active['cotd']);
-            $this->addCampaigns($active['allies']);
+        $this->addCampaigns($active['country']);
+        $this->addCampaigns($active['cotd']);
+        $this->addCampaigns($active['allies']);
 
-            $event->output->writeln('loaded');
-            $event->currentCampaign = $this->chooseCampaign($event);
+        $event->output->writeln('loaded');
+        $event->currentCampaign = $this->chooseCampaign($event);
 
-            while (true) {
-                $dispatcher->dispatch('fight.ready', $event);
-                $this->humanSleep($event);
-            }
-        } catch (\Exception $e) {
-            $event->output->writeln('<error>'.$e->getMessage().'</error>');
+        while (true) {
+            $dispatcher->dispatch('fight.ready', $event);
+            $this->humanSleep($event);
         }
     }
 
