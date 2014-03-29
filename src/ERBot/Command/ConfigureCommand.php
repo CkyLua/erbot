@@ -26,7 +26,7 @@ class ConfigureCommand extends Command
             'email' => ['eRepublik e-mail', false],
             'password' => ['eRepublik password', false],
             'user.agent' => ['User agent (default if empty)', null],
-            'proxy.http' => ['HTTP proxy (IP:port)', null],
+            'proxy.http' => ['HTTP proxy (IP:port:username:password)', null],
             'proxy.interface' => ['Interface proxy (interface name)', null],
         );
 

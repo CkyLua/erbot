@@ -53,7 +53,14 @@ if (file_exists($configFile)) {
 
         if ($config['proxy.http'] !== null) {
             $ex = explode(':', $config['proxy.http']);
-            $proxy = new HttpProxy($ex[0], $ex[1]);
+
+            $proxy = new HttpProxy(
+                $ex[0],
+                $ex[1],
+                isset($ex[2]) ? $ex[2]: null,
+                isset($ex[3]) ? $ex[3]: null
+            );
+            
             $client->setProxy($proxy);
         }
 
