@@ -16,32 +16,12 @@ class RefillCommand extends Command
     {
         $this
             ->setName('refill')
-            ->setDescription('Refill energy to keep it full.')
-            ->addOption(
-                'once',
-                null,
-                InputOption::VALUE_NONE,
-                'Set this option if command has to be executed just once'
-            )
-            ->addOption(
-                'interval',
-                'i',
-                InputOption::VALUE_REQUIRED,
-                'Interval between refills in seconds',
-                2700
-            )
-            ->addOption(
-                'reserve',
-                'r',
-                InputOption::VALUE_REQUIRED,
-                'Safety time reserve between updates (in %)',
-                20
-            );
+            ->setDescription('Refill energy to keep it full.');
     }
 
     protected function eat()
     {
-        $client = $this->getApplication()->erpkClient;
+        $client = $this->getApplication()->getErpkClient();
         $management = new ManagementModule($client);
         $status = $management->getEnergyStatus();
 
@@ -55,38 +35,12 @@ class RefillCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $once = $input->getOption('once');
-
-        $interval = filter_var($input->getOption('interval'), FILTER_VALIDATE_INT);
-        if (!$interval || $interval <= 0) {
-            throw new RuntimeException('Invalid time interval. Please specify amount of seconds.');
-        }
-
-        $reserve = filter_var($input->getOption('reserve'), FILTER_VALIDATE_INT);
-        if (!$reserve || $reserve < 0) {
-            throw new RuntimeException('Invalid time reserve. Please specify valid reserve in %.');
-        }
-
-        $deflection = $reserve / 100 * $interval;
-
-        while (true) {
-            $waitSeconds = $interval + mt_rand(-$deflection, $deflection);
-
-            $wakeupAt = time() + $waitSeconds;
-            $output->writeln('<comment>Waiting until '.gmdate('r', $wakeupAt).'.</comment>');
-            time_sleep_until($wakeupAt);
-
-            try {
-                $output->writeln('<info>'.$this->eat().'</info>');
-            } catch (Exception $e) {
-                $output->writeln(
-                    '<error>'.$e->getMessage().'</error>'
-                );
-            }
-            
-            if ($once) {
-                break;
-            }
+        try {
+            $output->writeln('<info>'.$this->eat().'</info>');
+        } catch (Exception $e) {
+            $output->writeln(
+                '<error>'.$e->getMessage().'</error>'
+            );
         }
     }
 }

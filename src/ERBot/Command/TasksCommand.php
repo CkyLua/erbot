@@ -37,7 +37,7 @@ class TasksCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $client = $this->getApplication()->erpkClient;
+        $client = $this->getApplication()->getErpkClient();
         $mgmt = new ManagementModule($client);
 
         $output->write('Working... ');

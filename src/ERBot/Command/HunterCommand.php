@@ -80,7 +80,7 @@ class HunterCommand extends Command
         $this->output = $output;
         $this->loader = str_split('|/-\|/-\\');
 
-        $this->client = $this->getApplication()->erpkClient;
+        $this->client = $this->getApplication()->getErpkClient();
         $this->managementModule = new ManagementModule($this->client);
         $this->marketModule = new MarketModule($this->client);
 

@@ -50,7 +50,7 @@ class ForexCommand extends Command
         $this->output = $output;
         $this->loader = str_split('|/-\|/-\\');
 
-        $this->client = $this->getApplication()->erpkClient;
+        $this->client = $this->getApplication()->getErpkClient();
         $this->exchangeModule = new ExchangeModule($this->client);
 
         $this->priceLimit = filter_var($input->getArgument('price'), FILTER_VALIDATE_FLOAT);

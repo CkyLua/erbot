@@ -51,7 +51,7 @@ class FighterCommand extends Command implements EventSubscriberInterface
 
         $event = new Event();
         $event->output = $output;
-        $event->client = $this->getApplication()->erpkClient;
+        $event->client = $this->getApplication()->getErpkClient();
         $event->mgmt   = new ManagementModule($event->client);
         $event->mil    = new MilitaryModule($event->client);
 

@@ -42,11 +42,12 @@ class ConfigureCommand extends Command
             );
         }
 
+        $configPath = $this->getApplication()->getConfigPath();
         file_put_contents(
-            $this->getApplication()->configFile,
+            $configPath,
             json_encode($config)
         );
         
-        $output->writeln('Configuration updated.');
+        $output->writeln('Config file has been written to '.realpath($configPath));
     }
 }
