@@ -12,6 +12,7 @@ use Symfony\Component\Console\Event\ConsoleCommandEvent;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Input\ArgvInput;
 
 class Application extends SymfonyApplication
 {
@@ -23,17 +24,37 @@ class Application extends SymfonyApplication
         date_default_timezone_set('America/Los_Angeles');
         parent::__construct('ERBot', 'UNKNOWN');
 
-        $this->add(new Command\ConfigureCommand());
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(ConsoleEvents::COMMAND, function ($event) {
+            $this->onCommand($event);
+        });
+        $this->setDispatcher($dispatcher);
 
         $this->getDefinition()->addOptions([
             new InputOption('--config', '-c', InputOption::VALUE_REQUIRED, 'Path to the JSON config file.', $dirname.'/config.json'),
             new InputOption('--delay', '-d', InputOption::VALUE_REQUIRED, 'Delay execution of the script.', 0),
         ]);
+
+        $this->addCommands([
+            new Command\ConfigureCommand(),
+            new Command\HunterCommand(),
+            new Command\FighterCommand(),
+            new Command\TasksCommand(),
+            new Command\ForexCommand(),
+            new Command\RefillCommand()
+        ]);
     }
 
-    public function doRun(InputInterface $input, OutputInterface $output)
+    public function onCommand(ConsoleCommandEvent $event)
     {
-        $input->bind($this->getDefinition());
+        $output = $event->getOutput();
+        $command = $event->getCommand();
+
+        $input = new ArgvInput();
+        try {
+            $input->bind($this->getDefinition());
+        } catch (\RuntimeException $e) {
+        }
 
         $delay = filter_var($input->getOption('delay'), FILTER_VALIDATE_INT);
         if ($delay > 0) {
@@ -44,12 +65,13 @@ class Application extends SymfonyApplication
 
         $this->configPath = $input->getOption('config');
         $this->loadConfig();
-
-        parent::doRun($input, $output);
     }
 
     public function getErpkClient()
     {
+        if (!isset($this->erpkClient)) {
+            throw new \RuntimeException('Missing configuration file.');
+        }
         return $this->erpkClient;
     }
 
@@ -108,14 +130,6 @@ class Application extends SymfonyApplication
             }
 
             $this->erpkClient = $client;
-
-            $this->addCommands([
-                new Command\HunterCommand(),
-                new Command\FighterCommand(),
-                new Command\TasksCommand(),
-                new Command\ForexCommand(),
-                new Command\RefillCommand()
-            ]);
         }
     }
 }
